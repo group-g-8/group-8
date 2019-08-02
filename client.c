@@ -11,8 +11,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#define PORT 9000
-#define LENGTH 512 
+#define PORT 2000
+#define LENGTH 1024
 
 
 void error(const char *msg)
@@ -26,105 +26,156 @@ int main(int argc, char *argv[])
 	/* Variable Definition */
 	int sockfd; 
 	int nsockfd;
-	char revbuf[LENGTH];
-    char command[LENGTH];
-    char response[LENGTH];
-
+	char revbuf[LENGTH]; 
+	char response[LENGTH]; 
 	struct sockaddr_in remote_addr;
 
-	/* Get the Socket file descriptor */
-	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-	{
-	    error("ERROR: Failed to obtain Socket Descriptor!\n");
-	}
+	char district[20];
+	char username[20];
 
-	/* Fill the socket address struct */
-	remote_addr.sin_family = AF_INET; 
-	remote_addr.sin_port = htons(PORT); 
-	inet_pton(AF_INET, "127.0.0.1", &remote_addr.sin_addr); 
-	bzero(&(remote_addr.sin_zero), 8);
+	printf("Enter Username:	");
+	gets(username);
+	printf("\n");
 
-	/* Try to connect the remote */
-	if (connect(sockfd, (struct sockaddr *)&remote_addr, sizeof(struct sockaddr)) == -1)
-	{
-	    error("ERROR: Failed to connect to the host!\n");
-	}
-	else {
-		printf("[Client] Connected to server at port %d...ok!\n", PORT);
-    }
-
-    printf("Welcome, please enter your username\n");
-    printf("Username:   ");
-    gets(command);
-    printf("\n");
+	printf("Enter District:	");
+	gets(district);
+	printf("\n");
 
 	commands();
-    while (1)
-    {
-        
-        printf("client:  ");
-        gets(command);
-        printf("\n");
-        
-        if (strcmp(command,"1")==0)
+	while (1)
+	{
+		/* Get the Socket file descriptor */
+		if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+		{
+			error("ERROR: Failed to obtain Socket Descriptor!\n");
+		}
+
+		/* Fill the socket address struct */
+		remote_addr.sin_family = AF_INET; 
+		remote_addr.sin_port = htons(PORT); 
+		inet_pton(AF_INET, "127.0.0.1", &remote_addr.sin_addr); 
+		bzero(&(remote_addr.sin_zero), 8);
+
+		/* Try to connect the remote */
+		if (connect(sockfd, (struct sockaddr *)&remote_addr, sizeof(struct sockaddr)) == -1)
+		{
+			error("ERROR: Failed to connect to the host!\n");
+		}
+		
+		char cmd[LENGTH];
+
+		bzero(cmd, LENGTH);
+		printf("client:  ");
+		gets(cmd);
+		printf("\n");
+		if (strcmp(cmd,"1")==0)
         {
+			bzero(username, 20);
+			bzero(district, 20);
             break;
+
         }else
         {
-            if (strcmp(command,"Addmember utf.txt")==0)
-            {
-                char* fs_name = "utf.txt";
-                char sdbuf[LENGTH]; 
-                printf("client: Sending %s to the Server...\n", fs_name);
-                FILE *fs = fopen(fs_name, "r");
-                if(fs == NULL)
-                {
-                    printf("ERROR: File %s not found.\n", fs_name);
-                    exit(1);
-                }
+			if (strcmp(cmd,"add uft.txt")==0)
+			{
+				send_file(sockfd,username,district);
+			}
+			else
+			{
+				if (strcmp(cmd,"check_status")==0 || strcmp(cmd,"get_statement")==0)
+				{
+					strncat(cmd," ",2);
+					strncat(cmd,username,20);
+					send(sockfd, cmd, sizeof(cmd), 0);
+					bzero(cmd, LENGTH);
 
-                bzero(sdbuf, LENGTH); 
-                int fs_block_sz; 
-                //int success = 0;
-                while((fs_block_sz = fread(sdbuf, sizeof(char), LENGTH, fs))>0)
-                {
-                    if(send(sockfd, sdbuf, fs_block_sz, 0) < 0)
-                    {
-                        printf("ERROR: Failed to send file %s.\n", fs_name);
-                        break;
-                    }
-                    bzero(sdbuf, LENGTH);
-                }
-                printf("Success:    File %s from Client was Sent!\n", fs_name);
-            }else
-            {
-                //sending data to the server		
-                send(sockfd, command, sizeof(command), 0);
+					//recieving from the server
+					
+					if(recv(sockfd, response, sizeof(response), 0)){
+						
+						printf("server:  %s\n",response);
+						//break;	
+					};
+					
+					bzero(response, LENGTH);
+				}
+				else{
+					//sending data to the server
+					strncat(cmd,",",2);
+					strncat(cmd,username,20);
+					strncat(cmd,",",2);
+					strncat(cmd,district,20);	
+					send(sockfd, cmd, sizeof(cmd), 0);
+					bzero(cmd, LENGTH);
 
-                //recieving from the server
-                recv(sockfd, response, sizeof(response), 0);
-                printf("server:  %s\n",response);
-            }
-            
-        }   
-    }
-    
-    
-
+					//recieving from the server
+					
+					if(recv(sockfd, response, sizeof(response), 0)){
+						printf("server:  %s\n",response);	
+					};
+				}
+				
+				
+				bzero(response, LENGTH);
+			}
+		}
+	}
+	
+	
+	
 	close (sockfd);
 	printf("[Client] Connection lost.\n");
 	return (0);
 }
 
 
+void send_file(int sock, char username[20],char district[20]){
+	char line[256];
+    char response[256];
+
+	// char command[50];
+	// char query[50];
+
+	// sscanf(criteria,"%s %s",command,query);
+	FILE *fp;
+	fp = fopen("utf.txt","r");
+	if (fp==NULL){
+		// printf("Error file not found;");
+        //break;
+	}
+	
+	while(!feof(fp)){
+
+		fgets(line,256,fp);
+
+        line [ strcspn(line, "\n\r") ] = 0;
+        strncat(line,",",2);
+        strncat(line,username,20);
+        strncat(line,",",2);
+        strncat(line,district,20);
+
+		send(sock, line, sizeof(line), 0);
+		
+        bzero(line, 256);
+ 	}
+	fclose(fp);
+	// printf("Ok File %s from Client was Sent!\n", fp);
+	recv(sock, response, sizeof(response), 0);
+	printf("server:  %s\n",response);
+	bzero(response, 256);
+	
+}
+
 void commands(){
     printf("Please choose from the following commands\n");
     printf("-----------------------------------------------------\n");
-    printf("1.  Addmember, member_name, date, gender, recommender\n");
-    printf("2.  check_status\n");
-    printf("3.  get_statement\n");
-    printf("4.  Addmember uft.txt\n");
-    printf("5.  search, criteria\n");
+    printf("1.  To add member:	Addmember member_name,date,gender,recommender,signature\n");
+    printf("2.  To check status:	check_status\n");
+    printf("3.  To get a statement:	get_statement\n");
+	printf("4.  To add members from file:	add uft.txt\n");
+    printf("5.  To search in a file:	search criteria\n");
+	printf("6.  To add correct a signature:	signature <sign>\n");
+	printf("7.  To exit, press:	1\n");
     printf("-----------------------------------------------------\n");
     
 }
